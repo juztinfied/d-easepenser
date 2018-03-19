@@ -34,17 +34,20 @@ worksheet = sheet.get_worksheet(0)
 
 #global variables
 pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files (x86)/Tesseract-OCR/tesseract'
-BOT_TOKEN = '529982566:AAEhBusHHmFZ6Tq0zVUCg8KBOMgbdh1Z16c'
+#BOT_TOKEN = '476170496:AAEp4-B-N96lVb4GZOhhREjNhVIs9x0hpbo' #for tin_bot
+BOT_TOKEN = '529982566:AAEhBusHHmFZ6Tq0zVUCg8KBOMgbdh1Z16c' #for deasepenser
 recipeName = 'empty'
 ingredientList = 'empty'
+recipeInstructions = 'empty'
+confirm_vector = {'rname': False, 'ingredientList': False, 'recipeInstructions': False}
 
 #states
-USER_CHOICE, RECIPE_NAME, INPUT_TYPE, CONFIRMATION, BIO = range(5)
+USER_CHOICE, RECIPE_NAME, INPUT_TYPE, CONFIRMATION, MAINMENU = range(5)
 
 
 def start(bot, update):
     update.message.reply_text("In start function") 
-    reply_keyboard = [['Upload Recipe', 'View Recipes']]
+    reply_keyboard = [['Upload Recipe', 'View Recipes'],['BAKE']]
 
     update.message.reply_text(
         'How can I help you?',
@@ -55,45 +58,52 @@ def start(bot, update):
 def view_recipes(bot,update):
     update.message.reply_text("In view_recipe function")
 
-def recipe_name(bot,update):
+def enter_recipe_name(bot,update):
     update.message.reply_text("In recipe_name function") 
     bot.send_message(chat_id=update.message.chat_id, text="Name of recipe?")
     return RECIPE_NAME
 
-def enter_recipe_name(bot,update):
+def enter_ingredients(bot,update):
+    global recipeName
     update.message.reply_text("In enter_recipe_name function") 
     recipeName = update.message.text
     logger.info("New recipe name: %s" %recipeName)
+    confirm_vector['rname'] = True
     bot.send_message(chat_id=update.message.chat_id, text="Name of recipe: " + recipeName)
     bot.send_message(chat_id=update.message.chat_id, text="Enter ingredient list (text or photo)")
     return INPUT_TYPE
 
 def text_to_text(bot,update):
+    global ingredientList
+    global recipeInstructions
+    
     bot.send_message(chat_id=update.message.chat_id, text="In text_to_text function")
-    ingredientList = update.message.text
     reply_keyboard = [['Yes', 'No']]
-    bot.send_message(chat_id=update.message.chat_id, text = 'Ingredient list: ')
-    bot.send_message(chat_id=update.message.chat_id, text = ingredientList)
-    bot.send_message(chat_id=update.message.chat_id, text = 'Confirm ingredient list?',reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+    
+    if (ingredientList == 'empty' or confirm_vector['ingredientList'] == False): #if ingredientList not filled yet or not confirmed yet
+        ingredientList = update.message.text #fill up ingredientList with user input
+        bot.send_message(chat_id=update.message.chat_id, text = 'Ingredient list: ')
+        bot.send_message(chat_id=update.message.chat_id, text = ingredientList)
+        bot.send_message(chat_id=update.message.chat_id,
+                         text = 'Confirm ingredient list?',
+                         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+                         )
+    
+    elif (recipeInstructions == 'empty' or confirm_vector['recipeInstructions'] == False): #if recipeInstructions not filled yet or not confirmed
+        recipeInstructions = update.message.text
+        bot.send_message(chat_id=update.message.chat_id, text = 'Recipe Instructions: ')
+        bot.send_message(chat_id=update.message.chat_id, text = recipeInstructions)
+        bot.send_message(chat_id=update.message.chat_id,
+                         text = 'Confirm recipe instructions?',
+                         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+                         )
+        
     return CONFIRMATION
 
-def edit_instructions(bot,update):
-    bot.send_message(chat_id=update.message.chat_id, text = 'Re-enter ingredient list')
-    return INPUT_TYPE
-
-def upload_data(bot,update):
-    update.message.reply_text("In upload_instruction function")
-    row_search = 2
-    filled = worksheet.row_values(row_search)
-    while (filled):
-        row_search = row_search + 1
-        filled = worksheet.row_values(row_search)
-    row = [recipeName, ingredientList, recipeInstructions]
-        
-    
-    
-    
 def image_to_text(bot,update):
+    global recipeInstructions
+    global ingredientList
+    
     user = update.message.from_user
     update.message.reply_text("in image_to_text function") 
     #fetching photo id from message
@@ -134,26 +144,104 @@ def image_to_text(bot,update):
 
     ingredientList = tesseract_results
     reply_keyboard = [['Yes', 'No']]
-    bot.send_message(chat_id=update.message.chat_id, text = 'Ingredient list: ')
-    bot.send_message(chat_id=update.message.chat_id, text = ingredientList)
-    bot.send_message(chat_id=update.message.chat_id, text = 'Confirm ingredient list?',reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+
+    if (confirm_vector['ingredientList'] == False): #if ingredientList not confirmed yet
+        ingredientList = update.message.text #fill up ingredientList
+        bot.send_message(chat_id=update.message.chat_id, text = 'Ingredient list: ')
+        bot.send_message(chat_id=update.message.chat_id, text = ingredientList)
+        bot.send_message(chat_id=update.message.chat_id,
+                         text = 'Confirm ingredient list?',
+                         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+                         )
+    
+    elif (confirm_vector['recipeInstructions'] == False): #if recipeInstructions not filled yet
+        recipeInstructions = update.message.text
+        bot.send_message(chat_id=update.message.chat_id, text = 'Recipe Instructions: ')
+        bot.send_message(chat_id=update.message.chat_id, text = recipeInstructions)
+        bot.send_message(chat_id=update.message.chat_id,
+                         text = 'Confirm recipe instructions?',
+                         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+                         )
+
     return CONFIRMATION
+
+def edit_entry(bot,update):
+    if (confirm_vector['ingredientList'] == False): #if user have not confirm ingredient list
+        bot.send_message(chat_id=update.message.chat_id, text = 'Re-enter ingredient list')
+    
+    elif (confirm_vector['recipeInstructions'] == False): #if user entered instructions but haven confirm it yet
+        bot.send_message(chat_id=update.message.chat_id, text = 'Re-enter recipe instructions')
+        
+    return INPUT_TYPE
+
+def enter_instructions(bot,update):
+    global ingredientList
+    global recipeInstructions
+    global confirm_vector
+
+    bot.send_message(chat_id=update.message.chat_id, text = 'In enter_instructions function')
+    
+    if (ingredientList != 'empty'): #if user has filled in ingredientList and he is in this loop, means he confirmed the ingredientList already
+        confirm_vector['ingredientList'] = True #confirm ingredientList in the vector
+
+    if (recipeInstructions == 'empty'): #if user has not ever entered recipe instructions before
+        bot.send_message(chat_id=update.message.chat_id, text = 'Enter recipe instructions')
+        return CONFIRMATION
+        #will be send to text_to_text or image_to_text, after that user will reply with YES or NO
+        #if user reply with YES, goto enter_instructions
+        #if user reply with NO, go to edit_entry, then go to text_to_text or image_to_text
+
+    elif (recipeInstructions != 'empty'): #if it is not empty and user is here, means that he has confirmed the instructions
+        confirm_vector['recipeInstruction'] = True 
+        upload_data(bot,update)
+        return ConversationHandler.END
+
+    else:
+        bot.send_message(chat_id=update.message.chat_id, text = 'Something is wrong somewhere...')
+        return ConversationHandler.END
+        
+
+def upload_data(bot,update):
+    update.message.reply_text("In upload_data function")
+    row_to_fill = 2
+    filled = worksheet.row_values(row_to_fill)
+    while (filled):
+        row_to_fill = row_to_fill + 1
+        filled = worksheet.row_values(row_to_fill)
+        
+    rowData = [recipeName, ingredientList, recipeInstructions]
+    worksheet.insert_row(rowData,row_to_fill)
+    bot.send_message(chat_id=update.message.chat_id, text =
+                     'New recipe has been uploaded:\n'+
+                     'Recipe Name:'+rowData[0]+'\n'+
+                     'Ingredient List:'+rowData[1]+'\n'+
+                     'Instructions:'+rowData[2]
+                    )
+    
+    reply_keyboard = [['Terminate', 'Main Menu']]
+    bot.send_message(chat_id=update.message.chat_id, text = 'Where do you want to go now?',
+                     reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+                     )
+    return MAINMENU
 
 def cancel(bot, update):
     user = update.message.from_user
-    logger.info("User %s canceled the conversation.", user.first_name)
-    update.message.reply_text('Bye! I hope we can talk again some day.',
-                              reply_markup=ReplyKeyboardRemove())
-
+    logger.info("User %s canceled the sequence", user.first_name)
+    update.message.reply_text('Exiting sequence... (Type /start to reset sequence)', reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 
 def error(bot, update, error):
     """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, error)
+    
+def bake(bot,update):
+    update.message.reply_text("In bake function")
+    logger.info("User selected BAKE")
 
-
+    
 def main():
+    print("D'easepenser is running...")
     # Create the EventHandler and pass it your bot's token.
     updater = Updater(BOT_TOKEN)
 
@@ -166,24 +254,29 @@ def main():
 
         states={
             USER_CHOICE: [RegexHandler('^(Upload Recipe)$',
-                                       recipe_name),
-                          RegexHandler('^View Recipes$',
+                                       enter_recipe_name),
+                          RegexHandler('^(View Recipes)$',
                                        view_recipes),
-                                       ],
-            RECIPE_NAME: [MessageHandler(Filters.text, enter_recipe_name)],
+                          RegexHandler('^(BAKE)$',
+                                        bake)
+                          ],
+            
+            RECIPE_NAME: [MessageHandler(Filters.text, enter_ingredients)],
 
             INPUT_TYPE: [MessageHandler(Filters.photo, image_to_text),
                          MessageHandler(Filters.text, text_to_text),
                          ],
             
-            CONFIRMATION: [RegexHandler('^(Yes)$',enter_instructions),
-                           RegexHandler('^(No)$', edit_instructions),
+            CONFIRMATION: [RegexHandler('^(Yes)$', enter_instructions),
+                           RegexHandler('^(No)$', edit_entry),
+                           MessageHandler(Filters.photo,image_to_text),
+                           MessageHandler(Filters.text,text_to_text),
                            ],
 
-            #LOCATION: [MessageHandler(Filters.location, location),
-                       #CommandHandler('skip', skip_location)],
-
-            #BIO: [MessageHandler(Filters.text, bio)]
+            MAINMENU: [RegexHandler('^(Terminate)$', view_recipes),
+                       RegexHandler('^(Main Menu)$', enter_recipe_name),
+                       MessageHandler(Filters.text,view_recipes),
+                       ]
         },
 
         fallbacks=[CommandHandler('cancel', cancel)]
@@ -205,3 +298,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    print("i am in the if main thing")
