@@ -4,7 +4,6 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, Rege
                           ConversationHandler)
 import logging
 
-#testing zi jun
 #tesseract related imports
 from PIL import Image
 import pytesseract
