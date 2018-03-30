@@ -12,10 +12,14 @@ import os
 import numpy as np
 import requests
 import urllib.request
+import paho.mqtt.client as mqtt
+import re
+
 
 #google drive related imports
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
 
 
 #Enable logging
@@ -23,6 +27,14 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+
+
+#Setting MQTT parameters
+mqtt_user="hquvffqs"
+mqtt_password="-EEv6Tqt1uuF"
+mqtt_server="m13.cloudmqtt.com"
+mqtt_port=18713
+
 
 #setting up google sheets access
 # use creds to create a client to interact with the Google Drive API
@@ -47,6 +59,9 @@ confirm_vector = {'rname': False, 'ingredientList': False, 'recipeInstructions':
 selectedRecipe = list()
 stepcount = -1;
 splitInstructions = list()
+currentStep = 'not baking anything'
+topic = 'no topic'
+quantity = 'no quantity'
 
 #states
 USER_CHOICE, RECIPE_NAME, INPUT_TYPE, CONFIRMATION, MAINMENU, BAKE_OR_BACK, RECIPE_CHOICE, NEXT_STEP = range(8)
@@ -113,6 +128,7 @@ def enter_ingredients(bot,update):
     confirm_vector['rname'] = True
     bot.send_message(chat_id=update.message.chat_id, text="Name of recipe: " + recipeName)
     bot.send_message(chat_id=update.message.chat_id, text="Enter ingredient list (text or photo)")
+
     return INPUT_TYPE
 
 def text_to_text(bot,update):
@@ -295,6 +311,7 @@ def bake(bot,update):
         bot.send_message(chat_id=update.message.chat_id, text = 'You have chosen to start baking process for ' + selectedRecipe[0])
         splitInstructions = selectedRecipe[2].split("\n")
         stepcount = 0
+        prepare_msg(splitInstructions[stepcount])
         reply_keyboard = [['NEXT STEP']]
         bot.send_message(chat_id=update.message.chat_id, text = splitInstructions[stepcount],
                          reply_markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
@@ -308,7 +325,8 @@ def bake(bot,update):
         selectedRecipe = list() #setting the global variables back to default value for next baking process
         stepcount = -1
         splitInstructions = list()
-
+        topic = ' '
+        quantity = ' '
         reply_keyboard = [['TERMINATE', 'MAIN MENU']]
         bot.send_message(chat_id=update.message.chat_id, text = 'What would you like to do now?',
                          reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
@@ -320,11 +338,50 @@ def bake(bot,update):
         bot.send_message(chat_id=update.message.chat_id, text = splitInstructions[stepcount],
                          reply_markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
                          )
+        prepare_msg(splitInstructions[stepcount])
         stepcount += 1
         return NEXT_STEP
 
+
+def prepare_msg(currentStep):
+    global topic
+    global quantity
+    
+    print ("Instruction step received from chat: " + currentStep)
+    #Extract out the numbers from the step into a list
+    templist = re.findall(r"[-+]?\d*\.\d+|\d+", currentStep)
+    #take out the number from the list, assuming there is only one number per instruction
+    if (templist):
+        quantity = templist[0]
+    #check if the word 'cups' or 'cup' is inside the instruction step
+    if ('cups' in currentStep or 'cup' in currentStep):
+        topic = 'dry'
+    elif ('tablespoon' in currentStep or 'teaspoon' in currentStep or 'tsp' in currentStep or 'tbsp' in currentStep):
+        topic = 'wet'
+
+    print("Topic is " + topic + " and the quantity is " + quantity)
+    return
+
+def publish_to_mqtt(bot,update):
+    update.message.reply_text("In mqtt function")
+    global topic
+    global quantity
+    if (topic == ' '):
+        bake(bot,update)
+    else:
+        client.publish(topic, quantity, qos=2, retain=False)
+        topic = ' '
+        quantity = ' '
+        bake(bot,update)
+
+
+#Callback functions for MQTT with paho
+def on_connect(client, userdata, flags, rc):
+    print("Connected with result code "+str(rc))
+
 def main():
     print("D'easepenser is running...")
+    client.publish('telegram bot status', 'telegram bot connected to mqtt', qos=2, retain=False)
     # Create the EventHandler and pass it your bot's token.
     updater = Updater(BOT_TOKEN)
 
@@ -367,7 +424,7 @@ def main():
                            RegexHandler('^(MAIN MENU)$', main_menu_redirect),
                            ],
 
-            NEXT_STEP: [MessageHandler(Filters.text,bake),
+            NEXT_STEP: [MessageHandler(Filters.text,publish_to_mqtt),
                         ],
             
         },
@@ -387,6 +444,15 @@ def main():
     # SIGTERM or SIGABRT. This should be used most of the time, since
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
+
+
+#MQTT-related declarations
+client = mqtt.Client()
+client.on_connect = on_connect
+client.username_pw_set(mqtt_user, password=mqtt_password)
+client.connect_async(mqtt_server, mqtt_port, 60)
+client.loop_start()
+
 
 
 if __name__ == '__main__':
